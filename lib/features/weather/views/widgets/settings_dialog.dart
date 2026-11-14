@@ -84,6 +84,16 @@ class _SettingsDialogState extends State<SettingsDialog> {
   Future<void> _handleSave() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // タブ表示名が空欄の場合は、場所検索の地名を自動適用
+    for (final item in _items) {
+      if (item.nameCtrl.text.trim().isEmpty) {
+        final place = item.placeNameCtrl.text.trim();
+        if (place.isNotEmpty) {
+          item.nameCtrl.text = place;
+        }
+      }
+    }
+
     setState(() => _isSaving = true);
     try {
       final newLocations = _items.map((item) {

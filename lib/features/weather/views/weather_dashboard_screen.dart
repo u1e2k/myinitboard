@@ -28,14 +28,24 @@ class _WeatherDashboardScreenState extends State<WeatherDashboardScreen> {
   // Selected location index in _locations
   int _selectedLocationIndex = 0;
 
-  // Forecast display mode: 0: Hourly (1時間毎), 1: Daily (1日毎)
-  int _forecastTab = 0;
+  // PageController for horizontal swiping across locations
+  late final PageController _pageController;
+
+  // Forecast display mode: 0: Hourly (1時間毎), 1: Daily (1日毎), 2: All (すべて表示)
+  int _forecastTab = 2;
 
   @override
   void initState() {
     super.initState();
+    _pageController = PageController(initialPage: _selectedLocationIndex);
     _loadSavedForecastTab();
     _loadAndFetchLocations();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadSavedForecastTab() async {
@@ -60,6 +70,10 @@ class _WeatherDashboardScreenState extends State<WeatherDashboardScreen> {
         _selectedLocationIndex = 0;
       }
     });
+
+    if (_pageController.hasClients && _selectedLocationIndex < _locations.length) {
+      _pageController.jumpToPage(_selectedLocationIndex);
+    }
 
     await _fetchAllWeather();
   }
@@ -96,6 +110,24 @@ class _WeatherDashboardScreenState extends State<WeatherDashboardScreen> {
     }
   }
 
+  void _onTabSelected(int index) {
+    if (_selectedLocationIndex == index) return;
+    setState(() => _selectedLocationIndex = index);
+    if (_pageController.hasClients) {
+      _pageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOutCubic,
+      );
+    }
+  }
+
+  void _onPageChanged(int index) {
+    if (_selectedLocationIndex != index) {
+      setState(() => _selectedLocationIndex = index);
+    }
+  }
+
   Future<void> _handleSaveLocations(List<LocationConfig> newLocations) async {
     await ConfigService.saveLocations(newLocations);
     setState(() {
@@ -106,6 +138,9 @@ class _WeatherDashboardScreenState extends State<WeatherDashboardScreen> {
       _weatherDataMap.clear();
       _errorsMap.clear();
     });
+    if (_pageController.hasClients) {
+      _pageController.jumpToPage(_selectedLocationIndex);
+    }
     await _fetchAllWeather();
   }
 
@@ -118,6 +153,9 @@ class _WeatherDashboardScreenState extends State<WeatherDashboardScreen> {
       _weatherDataMap.clear();
       _errorsMap.clear();
     });
+    if (_pageController.hasClients) {
+      _pageController.jumpToPage(0);
+    }
     await _fetchAllWeather();
   }
 
@@ -178,7 +216,7 @@ class _WeatherDashboardScreenState extends State<WeatherDashboardScreen> {
                 locations: _locations,
                 selectedIndex: _selectedLocationIndex,
                 weatherDataMap: _weatherDataMap,
-                onSelectIndex: (idx) => setState(() => _selectedLocationIndex = idx),
+                onSelectIndex: _onTabSelected,
                 onAddLocation: _openSettingsDialog,
               ),
               Expanded(
@@ -196,7 +234,7 @@ class _WeatherDashboardScreenState extends State<WeatherDashboardScreen> {
     );
   }
 
-  /// Main content view: Displays the single selected location comfortably
+  /// Main content view: PageView supporting horizontal swipe transitions between locations
   Widget _buildMainContent(bool isLandscape) {
     if (_locations.isEmpty) {
       return Center(
@@ -224,28 +262,38 @@ class _WeatherDashboardScreenState extends State<WeatherDashboardScreen> {
       );
     }
 
-    final activeLocation = _locations[_selectedLocationIndex];
-    final activeData = _weatherDataMap[activeLocation.id];
-    final activeLoading = _loadingIds.contains(activeLocation.id);
-    final activeError = _errorsMap[activeLocation.id];
+    final maxCardWidth = isLandscape ? 1100.0 : 860.0;
 
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 860),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-          child: LocationWeatherCard(
-            key: ValueKey(activeLocation.id),
-            data: activeData,
-            isLoading: activeLoading,
-            errorMessage: activeError,
-            onRetry: () => _fetchWeatherForLocation(activeLocation),
-            isLandscape: isLandscape,
-            forecastTab: _forecastTab,
-            onForecastTabChanged: _setForecastTab,
+    return PageView.builder(
+      controller: _pageController,
+      onPageChanged: _onPageChanged,
+      physics: const BouncingScrollPhysics(),
+      itemCount: _locations.length,
+      itemBuilder: (context, index) {
+        final loc = _locations[index];
+        final data = _weatherDataMap[loc.id];
+        final isLoading = _loadingIds.contains(loc.id);
+        final errorMessage = _errorsMap[loc.id];
+
+        return Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxCardWidth),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+              child: LocationWeatherCard(
+                key: ValueKey(loc.id),
+                data: data,
+                isLoading: isLoading,
+                errorMessage: errorMessage,
+                onRetry: () => _fetchWeatherForLocation(loc),
+                isLandscape: isLandscape,
+                forecastTab: _forecastTab,
+                onForecastTabChanged: _setForecastTab,
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

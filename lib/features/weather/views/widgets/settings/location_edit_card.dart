@@ -178,9 +178,24 @@ class _LocationEditCardState extends State<LocationEditCard> {
               final displayNameField = TextFormField(
                 controller: item.nameCtrl,
                 style: const TextStyle(color: AppColors.slate50, fontSize: 13),
-                decoration: _inputDecoration('タブ表示名（例: 自宅, 職場）'),
+                decoration: _inputDecoration(
+                  'タブ表示名（空欄時は場所名を自動適用）',
+                  hint: item.placeNameCtrl.text.isNotEmpty ? item.placeNameCtrl.text : '例: 自宅, 職場',
+                  suffixIcon: item.nameCtrl.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear_rounded, size: 16, color: AppColors.slate400),
+                          splashRadius: 14,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                          tooltip: '入力をクリア',
+                          onPressed: () {
+                            item.nameCtrl.clear();
+                            setState(() {});
+                          },
+                        )
+                      : null,
+                ),
                 onChanged: (_) => setState(() {}),
-                validator: (v) => (v == null || v.trim().isEmpty) ? '表示名を入力してください' : null,
               );
 
               final placeSearchField = TextFormField(
@@ -197,7 +212,19 @@ class _LocationEditCardState extends State<LocationEditCard> {
                             child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.sky400),
                           ),
                         )
-                      : const Icon(Icons.search_rounded, size: 18, color: AppColors.slate400),
+                      : item.placeNameCtrl.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear_rounded, size: 16, color: AppColors.slate400),
+                              splashRadius: 14,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                              tooltip: '検索文字をクリア',
+                              onPressed: () {
+                                item.placeNameCtrl.clear();
+                                _onPlaceQueryChanged('');
+                              },
+                            )
+                          : const Icon(Icons.search_rounded, size: 18, color: AppColors.slate400),
                 ),
                 onChanged: _onPlaceQueryChanged,
               );

@@ -270,6 +270,13 @@ void main() {
       expect(find.text('保存して再取得'), findsOneWidget);
       expect(find.text('キャンセル'), findsOneWidget);
 
+      // Verify clear button exists for populated display name field
+      expect(find.byIcon(Icons.clear_rounded), findsWidgets);
+      // Tap the first clear button to clear '東京' in display name
+      await tester.tap(find.byIcon(Icons.clear_rounded).first);
+      await tester.pump();
+      expect(find.text('（未設定）'), findsOneWidget);
+
       // Tap Add New Location button
       await tester.tap(find.text('新しい地点を追加'));
       await tester.pump(const Duration(milliseconds: 100));
@@ -280,6 +287,31 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       expect(find.text('登録地点の管理'), findsNothing);
+    });
+
+    testWidgets('Empty display name automatically falls back to placeName on save', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1133, 744);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(const MyInitBoardApp());
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Open Settings
+      await tester.tap(find.byIcon(Icons.settings_outlined));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Clear the display name of location 1 ('東京')
+      await tester.tap(find.byIcon(Icons.clear_rounded).first);
+      await tester.pump();
+
+      // Tap '保存して再取得' with empty display name
+      await tester.tap(find.text('保存して再取得'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      // Location 1 placeName is '東京都', which should now be automatically used as display name on the tab
+      expect(find.text('東京都'), findsOneWidget);
     });
 
     testWidgets('Toggles between hourly and daily forecast views in LocationWeatherCard', (WidgetTester tester) async {
@@ -326,7 +358,8 @@ void main() {
       ));
       await tester.pump();
 
-      // Displays '1時間毎' and '1日毎' toggle buttons
+      // Displays 'すべて', '1時間毎', '1日毎' toggle buttons
+      expect(find.text('すべて'), findsOneWidget);
       expect(find.text('1時間毎'), findsOneWidget);
       expect(find.text('1日毎'), findsOneWidget);
 
@@ -337,10 +370,42 @@ void main() {
       // 7日間の日別予報テキストが表示されている
       expect(find.text('7日間の日別予報'), findsOneWidget);
 
-      // Tap back to '1時間毎'
+      // Tap to '1時間毎'
       await tester.tap(find.text('1時間毎'));
       await tester.pump(const Duration(milliseconds: 250));
       expect(find.text('1時間ごとの予報（明日24時まで）'), findsOneWidget);
+
+      // Tap to 'すべて'
+      await tester.tap(find.text('すべて'));
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(find.text('詳細天気予報（時間別 ＆ 週間）'), findsOneWidget);
+    });
+
+    testWidgets('Swiping horizontally changes the active location in PageView', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1133, 744);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(const MyInitBoardApp());
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.byType(PageView), findsOneWidget);
+
+      // Initially Tokyo card is in view
+      expect(find.byKey(const ValueKey('default_tokyo')), findsOneWidget);
+
+      // Swipe left on the screen to navigate from index 0 (Tokyo) to index 1 (Osaka)
+      await tester.fling(find.byType(PageView), const Offset(-400, 0), 1000);
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // After swiping, the second page (Osaka) is in view
+      expect(find.byKey(const ValueKey('default_osaka')), findsOneWidget);
+
+      // Swipe right to navigate back to Tokyo
+      await tester.fling(find.byType(PageView), const Offset(400, 0), 1000);
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.byKey(const ValueKey('default_tokyo')), findsOneWidget);
     });
   });
 }
