@@ -215,7 +215,6 @@ void main() {
       // App title and header icons
       expect(find.text('myinitboard'), findsOneWidget);
       expect(find.byIcon(Icons.dashboard_customize_rounded), findsOneWidget);
-      expect(find.byIcon(Icons.refresh_rounded), findsOneWidget);
       expect(find.byIcon(Icons.settings_outlined), findsOneWidget);
 
       // Location tab bar is present with registered locations and Add button

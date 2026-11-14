@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/theme.dart';
 import '../../models/weather_code_helper.dart';
 import '../../models/weather_data.dart';
+import 'temp_range_bar.dart';
 
 class DailyForecastList extends StatelessWidget {
   final List<DailyForecast> dailyForecasts;
@@ -181,7 +182,7 @@ class DailyForecastList extends StatelessWidget {
                     // Visual Temperature Range Bar (iOS style)
                     Expanded(
                       flex: 3,
-                      child: _buildTempRangeBar(
+                      child: TempRangeBar(
                         min: item.tempMin,
                         max: item.tempMax,
                         overallMin: overallMin,
@@ -210,56 +211,6 @@ class DailyForecastList extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildTempRangeBar({
-    required double min,
-    required double max,
-    required double overallMin,
-    required double overallMax,
-  }) {
-    final range = overallMax - overallMin;
-    final leftPercent = ((min - overallMin) / range).clamp(0.0, 1.0);
-    final widthPercent = ((max - min) / range).clamp(0.12, 1.0);
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final totalWidth = constraints.maxWidth;
-        final leftOffset = leftPercent * totalWidth;
-        final barWidth = math.min(widthPercent * totalWidth, totalWidth - leftOffset);
-
-        return Container(
-          height: 5,
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.35),
-            borderRadius: BorderRadius.circular(3),
-          ),
-          child: Stack(
-            children: [
-              Positioned(
-                left: leftOffset,
-                width: math.max(barWidth, 6.0),
-                top: 0,
-                bottom: 0,
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(3),
-                    gradient: const LinearGradient(
-                      colors: [
-                        AppColors.tempCold,
-                        AppColors.tempMild,
-                        AppColors.tempWarm,
-                        AppColors.tempHot,
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 }

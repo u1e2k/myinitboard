@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/config_service.dart';
 import '../../../../core/theme.dart';
 import '../models/location_config.dart';
-import '../models/weather_code_helper.dart';
 import '../models/weather_data.dart';
 import '../services/weather_service.dart';
+import 'widgets/dashboard_app_bar.dart';
+import 'widgets/location_tab_bar.dart';
 import 'widgets/location_weather_card.dart';
 import 'widgets/settings_dialog.dart';
 
@@ -167,8 +167,20 @@ class _WeatherDashboardScreenState extends State<WeatherDashboardScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              _buildAppBar(),
-              _buildLocationTabBar(),
+              DashboardAppBar(
+                latestFetchTime: _latestFetchTime,
+                isAnyFromCache: _isAnyFromCache,
+                isLoading: _isLoadingAny,
+                onRefresh: _fetchAllWeather,
+                onOpenSettings: _openSettingsDialog,
+              ),
+              LocationTabBar(
+                locations: _locations,
+                selectedIndex: _selectedLocationIndex,
+                weatherDataMap: _weatherDataMap,
+                onSelectIndex: (idx) => setState(() => _selectedLocationIndex = idx),
+                onAddLocation: _openSettingsDialog,
+              ),
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
@@ -179,294 +191,6 @@ class _WeatherDashboardScreenState extends State<WeatherDashboardScreen> {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAppBar() {
-    final fetchTime = _latestFetchTime;
-    final timeStr = fetchTime != null ? DateFormat('MM/dd HH:mm').format(fetchTime) : '--:--';
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: const BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: AppColors.glassBorder, width: 0.8),
-        ),
-      ),
-      child: Row(
-        children: [
-          // App Logo & Title
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF38BDF8), Color(0xFF6366F1)],
-              ),
-              borderRadius: BorderRadius.circular(9),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.sky400.withValues(alpha: 0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: const Icon(Icons.dashboard_customize_rounded, color: Colors.white, size: 16),
-          ),
-          const SizedBox(width: 9),
-          const Text(
-            'myinitboard',
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 17,
-              letterSpacing: -0.2,
-              color: AppColors.slate50,
-            ),
-          ),
-          const Spacer(),
-
-          // Status & Last fetch time badge
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-            decoration: BoxDecoration(
-              color: _isAnyFromCache ? AppColors.offlineBg : AppColors.glassSurface,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: _isAnyFromCache
-                    ? AppColors.offlineText.withValues(alpha: 0.4)
-                    : AppColors.glassBorderLight,
-                width: 0.8,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 6.5,
-                  height: 6.5,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _isAnyFromCache ? AppColors.offlineText : const Color(0xFF34D399),
-                    boxShadow: [
-                      BoxShadow(
-                        color: (_isAnyFromCache ? AppColors.offlineText : const Color(0xFF34D399))
-                            .withValues(alpha: 0.6),
-                        blurRadius: 6,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  _isAnyFromCache ? 'オフライン ($timeStr)' : '同期: $timeStr',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: _isAnyFromCache ? AppColors.offlineText : AppColors.slate300,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-
-          // Refresh Button
-          IconButton(
-            tooltip: '全地点を再取得',
-            onPressed: _isLoadingAny ? null : _fetchAllWeather,
-            style: IconButton.styleFrom(
-              backgroundColor: AppColors.glassSurface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(9),
-                side: const BorderSide(color: AppColors.glassBorder, width: 0.8),
-              ),
-              padding: const EdgeInsets.all(7),
-            ),
-            icon: _isLoadingAny
-                ? const SizedBox(
-                    width: 15,
-                    height: 15,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.sky400),
-                  )
-                : const Icon(Icons.refresh_rounded, color: AppColors.slate200, size: 17),
-          ),
-          const SizedBox(width: 5),
-
-          // Settings Button
-          IconButton(
-            tooltip: '登録地点の管理・設定',
-            onPressed: _openSettingsDialog,
-            style: IconButton.styleFrom(
-              backgroundColor: AppColors.glassSurface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(9),
-                side: const BorderSide(color: AppColors.glassBorder, width: 0.8),
-              ),
-              padding: const EdgeInsets.all(7),
-            ),
-            icon: const Icon(Icons.settings_outlined, color: AppColors.slate200, size: 17),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Dynamic Location Tab Bar: Supports any number of locations (horizontal scrollable)
-  Widget _buildLocationTabBar() {
-    if (_locations.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Container(
-        padding: const EdgeInsets.all(3.5),
-        decoration: BoxDecoration(
-          color: AppColors.slate900.withValues(alpha: 0.85),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.glassBorderLight, width: 0.8),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.25),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (int i = 0; i < _locations.length; i++) ...[
-                _buildLocationTabItem(
-                  index: i,
-                  location: _locations[i],
-                  weatherData: _weatherDataMap[_locations[i].id],
-                ),
-                if (i < _locations.length - 1) const SizedBox(width: 4),
-              ],
-              const SizedBox(width: 4),
-              // Quick "Add Location" icon button on tab bar
-              InkWell(
-                onTap: _openSettingsDialog,
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.add_rounded, size: 16, color: AppColors.sky400),
-                      SizedBox(width: 2),
-                      Text(
-                        '追加',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.sky400,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLocationTabItem({
-    required int index,
-    required LocationConfig location,
-    required LocationWeatherData? weatherData,
-  }) {
-    final isSelected = _selectedLocationIndex == index;
-
-    IconData? weatherIcon;
-    Color? iconColor;
-    String? tempText;
-
-    if (weatherData != null) {
-      final current = weatherData.current;
-      final isNight = current.time.hour < 6 || current.time.hour >= 18;
-      final info = WeatherCodeHelper.getInfo(current.weatherCode, isNight: isNight);
-      weatherIcon = info.icon;
-      iconColor = info.color;
-      tempText = '${current.temperature.toStringAsFixed(0)}°';
-    }
-
-    return GestureDetector(
-      onTap: () => setState(() => _selectedLocationIndex = index),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 12),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.sky400 : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: AppColors.sky400.withValues(alpha: 0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Weather Icon (Today's icon)
-            if (weatherIcon != null) ...[
-              Icon(
-                weatherIcon,
-                size: 17,
-                color: isSelected ? AppColors.slate950 : (iconColor ?? AppColors.sky400),
-              ),
-              const SizedBox(width: 6),
-            ] else ...[
-              Icon(
-                Icons.place_rounded,
-                size: 15,
-                color: isSelected ? AppColors.slate950 : AppColors.slate400,
-              ),
-              const SizedBox(width: 5),
-            ],
-
-            // Custom Display Name
-            Text(
-              location.name,
-              style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                color: isSelected ? AppColors.slate950 : AppColors.slate200,
-              ),
-            ),
-
-            // Temperature pill
-            if (tempText != null) ...[
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? Colors.black.withValues(alpha: 0.15)
-                      : AppColors.slate800,
-                  borderRadius: BorderRadius.circular(5),
-                ),
-                child: Text(
-                  tempText,
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w800,
-                    color: isSelected ? AppColors.slate950 : AppColors.slate300,
-                  ),
-                ),
-              ),
-            ],
-          ],
         ),
       ),
     );

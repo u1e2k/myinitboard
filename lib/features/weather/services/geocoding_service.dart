@@ -37,6 +37,11 @@ class GeocodingResult {
 }
 
 class GeocodingService {
+  static const Map<String, String> _headers = {
+    'User-Agent': 'myinitboard/1.0 (iPadOS; Flutter; Open-Meteo Client)',
+    'Accept': 'application/json',
+  };
+
   /// Search locations using Open-Meteo free Geocoding API (no API key required).
   static Future<List<GeocodingResult>> search(String query) async {
     final trimmed = query.trim();
@@ -51,7 +56,9 @@ class GeocodingService {
     );
 
     try {
-      final response = await http.get(uri).timeout(const Duration(seconds: 6));
+      final response = await http
+          .get(uri, headers: _headers)
+          .timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body) as Map<String, dynamic>;
         final results = decoded['results'] as List<dynamic>?;

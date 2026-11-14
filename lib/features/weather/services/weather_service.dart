@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/location_config.dart';
@@ -8,10 +10,15 @@ class WeatherService {
   static const String _cacheKeyPrefixJson = 'cached_weather_json_';
   static const String _cacheKeyPrefixTime = 'cached_weather_time_';
 
+  static const Map<String, String> _headers = {
+    'User-Agent': 'myinitboard/1.0 (iPadOS; Flutter; Open-Meteo Client)',
+    'Accept': 'application/json',
+  };
+
   /// Fetch weather for a given location.
   /// If online and successful: parses JSON, saves to cache, returns data.
   /// If offline or request fails: tries to load from cache.
-  /// If no cache exists: rethrows error.
+  /// If no cache exists: rethrows user-friendly error.
   static Future<LocationWeatherData> fetchWeather(LocationConfig location) async {
     final uri = Uri.parse(
       'https://api.open-meteo.com/v1/forecast?'
@@ -23,32 +30,51 @@ class WeatherService {
       'forecast_days=7',
     );
 
-    try {
-      final response = await http.get(uri).timeout(const Duration(seconds: 10));
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-        final now = DateTime.now();
+    dynamic lastError;
 
-        // Save to cache
-        await _saveToCache(location.id, response.body, now);
+    // Retry up to 2 times (initial attempt + 1 immediate retry)
+    for (int attempt = 0; attempt < 2; attempt++) {
+      try {
+        final response = await http
+            .get(uri, headers: _headers)
+            .timeout(const Duration(seconds: 15));
 
-        return LocationWeatherData.fromOpenMeteoJson(
-          location: location,
-          json: decoded,
-          fetchedAt: now,
-          isFromCache: false,
-        );
-      } else {
-        throw Exception('Server returned ${response.statusCode}');
+        if (response.statusCode == 200) {
+          final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+          final now = DateTime.now();
+
+          // Save to cache
+          await _saveToCache(location.id, response.body, now);
+
+          return LocationWeatherData.fromOpenMeteoJson(
+            location: location,
+            json: decoded,
+            fetchedAt: now,
+            isFromCache: false,
+          );
+        } else {
+          throw HttpException('サーバーエラー (HTTP ${response.statusCode})');
+        }
+      } catch (e) {
+        lastError = e;
       }
-    } catch (e) {
-      // Failed to fetch from network. Try cache fallback.
-      final cached = await _loadFromCache(location);
-      if (cached != null) {
-        return cached;
-      }
-      rethrow;
     }
+
+    // Network request failed after retry. Check cache fallback.
+    final cached = await _loadFromCache(location);
+    if (cached != null) {
+      return cached;
+    }
+
+    // Format friendly error message
+    if (lastError is TimeoutException) {
+      throw Exception('通信がタイムアウトしました。iPadのWi-Fi接続をご確認の上、再試行してください。');
+    } else if (lastError is SocketException) {
+      throw Exception('ネットワークに接続できません。Wi-Fi接続をご確認ください。');
+    } else if (lastError is Exception) {
+      throw lastError;
+    }
+    throw Exception('通信に失敗しました: $lastError');
   }
 
   static Future<void> _saveToCache(String locationId, String jsonString, DateTime time) async {
